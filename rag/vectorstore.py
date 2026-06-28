@@ -1,52 +1,39 @@
 """
 vectorstore.py
 --------------
-Handles ChromaDB: building the vector store from chunks,
+Handles FAISS: building the vector store from chunks,
 persisting it to disk, and loading it back for querying.
 """
 
 import os
 from typing import List
-
 from langchain_core.documents import Document
-from langchain_community.vectorstores import Chroma
-
-from config.settings import CHROMA_PERSIST_DIR, CHROMA_COLLECTION_NAME
+from langchain_community.vectorstores import FAISS
 from rag.embeddings import get_embedding_model
 
+FAISS_PATH = "vectorstore/faiss_index"
 
-def build_vectorstore(chunks: List[Document]) -> Chroma:
-    """
-    Embeds document chunks and stores them in ChromaDB.
-    Persists to disk at CHROMA_PERSIST_DIR.
-    """
+
+def build_vectorstore(chunks: List[Document]) -> FAISS:
     print(f"\n── Building Vector Store ───────────────")
     embeddings = get_embedding_model()
-
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        collection_name=CHROMA_COLLECTION_NAME,
-        persist_directory=CHROMA_PERSIST_DIR,
-    )
-    print(f"✓ Vector store saved to '{CHROMA_PERSIST_DIR}' ({len(chunks)} chunks indexed)")
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    os.makedirs("vectorstore", exist_ok=True)
+    vectorstore.save_local(FAISS_PATH)
+    print(f"✓ Vector store saved ({len(chunks)} chunks indexed)")
     return vectorstore
 
 
-def load_vectorstore() -> Chroma:
-    """
-    Loads an existing ChromaDB vector store from disk.
-    """
+def load_vectorstore() -> FAISS:
     embeddings = get_embedding_model()
-    vectorstore = Chroma(
-        collection_name=CHROMA_COLLECTION_NAME,
-        embedding_function=embeddings,
-        persist_directory=CHROMA_PERSIST_DIR,
+    vectorstore = FAISS.load_local(
+        FAISS_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
     )
-    print(f"✓ Vector store loaded from '{CHROMA_PERSIST_DIR}'")
+    print(f"✓ Vector store loaded from '{FAISS_PATH}'")
     return vectorstore
 
 
 def vectorstore_exists() -> bool:
-    """Check if a persisted vector store already exists."""
-    return os.path.exists(CHROMA_PERSIST_DIR) and len(os.listdir(CHROMA_PERSIST_DIR)) > 0
+    return os.path.exists(FAISS_PATH)

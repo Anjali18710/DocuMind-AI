@@ -6,7 +6,7 @@ Returns top-K relevant chunks for a given query.
 """
 
 from langchain_community.vectorstores import Chroma
-from langchain.schema.retriever import BaseRetriever
+from langchain_core.retrievers import BaseRetriever
 from config.settings import TOP_K_RESULTS
 
 

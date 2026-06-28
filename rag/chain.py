@@ -2,13 +2,11 @@
 chain.py
 --------
 Builds the RAG chain using LangChain.
-Primary LLM: Groq (llama3-8b-8192)
+Primary LLM: Groq (llama-3.3-70b-versatile)
 Fallback LLM: Gemini (gemini-1.5-flash)
 """
 
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-from langchain.schema.retriever import BaseRetriever
+from langchain_core.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -17,9 +15,7 @@ from config.settings import (
     GROQ_MODEL, GEMINI_MODEL, PRIMARY_LLM
 )
 
-RAG_PROMPT = PromptTemplate(
-    input_variables=["context", "question"],
-    template="""You are an expert assistant for SAIL Bokaro Steel Plant.
+PROMPT_TEMPLATE = """You are an expert assistant for SAIL Bokaro Steel Plant.
 Answer questions about SOPs and safety guidelines using ONLY the context below.
 
 Rules:
@@ -27,7 +23,6 @@ Rules:
 - If the answer is not in the context, say: "I could not find this information in the available documents. Please consult the relevant department."
 - Always mention which document the information comes from.
 - Be concise and precise.
-- For safety-critical procedures, always remind workers to follow official protocols.
 
 Context:
 {context}
@@ -35,11 +30,9 @@ Context:
 Question: {question}
 
 Answer:"""
-)
 
 
 def get_llm(use_fallback: bool = False):
-    """Returns Groq (primary) or Gemini (fallback) LLM."""
     if not use_fallback and PRIMARY_LLM == "groq":
         print("✓ Using Groq LLM (primary)")
         return ChatGroq(
@@ -58,36 +51,35 @@ def get_llm(use_fallback: bool = False):
         )
 
 
-def build_rag_chain(retriever: BaseRetriever, use_fallback: bool = False) -> RetrievalQA:
-    """Builds and returns the full RAG chain."""
+def build_rag_chain(retriever, use_fallback: bool = False):
     print(f"\n── Building RAG Chain ──────────────────")
     llm = get_llm(use_fallback)
-
-    chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        chain_type_kwargs={"prompt": RAG_PROMPT},
-    )
     print("✓ RAG chain ready")
-    return chain
+    return llm, retriever
 
 
-def query_chain(chain: RetrievalQA, question: str) -> dict:
-    """
-    Runs a query through the RAG chain.
-    Returns: { "answer": str, "sources": list[str] }
-    """
-    result = chain.invoke({"query": question})
-    answer = result["result"]
-    source_docs = result.get("source_documents", [])
-
+def query_chain(chain_tuple, question: str) -> dict:
+    llm, retriever = chain_tuple
+    
+    # Retrieve relevant docs
+    source_docs = retriever.invoke(question)
+    
+    # Build context from docs
+    context = "\n\n".join(doc.page_content for doc in source_docs)
+    
+    # Build prompt
+    prompt = PROMPT_TEMPLATE.format(context=context, question=question)
+    
+    # Call LLM directly
+    response = llm.invoke(prompt)
+    answer = response.content
+    
+    # Extract sources
     sources = list({
         doc.metadata.get("source", "Unknown")
         for doc in source_docs
     })
-
+    
     return {
         "answer": answer,
         "sources": sources,

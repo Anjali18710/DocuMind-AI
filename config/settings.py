@@ -9,7 +9,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ── LLM Config ────────────────────────────────────────────
 PRIMARY_LLM = "groq"
-GROQ_MODEL = "llama3-8b-8192"
+GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = "gemini-1.5-flash"
 
 # ── Embedding Model ───────────────────────────────────────
