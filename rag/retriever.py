@@ -1,16 +1,16 @@
 """
 retriever.py
 ------------
-Wraps ChromaDB with a similarity-based retriever.
+Wraps the FAISS vector store with a similarity-based retriever.
 Returns top-K relevant chunks for a given query.
 """
 
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_core.retrievers import BaseRetriever
 from config.settings import TOP_K_RESULTS
 
 
-def get_retriever(vectorstore: Chroma) -> BaseRetriever:
+def get_retriever(vectorstore: FAISS) -> BaseRetriever:
     """
     Returns a retriever that fetches top-K similar chunks.
     """
