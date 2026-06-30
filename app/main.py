@@ -8,59 +8,73 @@ from chat import get_answer
 st.set_page_config(
     page_title="DocuMind AI",
     page_icon="🏭",
-    layout="centered",
+    layout="wide",
 )
 
-# ── Custom CSS ────────────────────────────────────────────
+# ── Load CSS ──────────────────────────────────────────────
+css_path = os.path.join(os.path.dirname(__file__), "styles.css")
+
+with open(css_path) as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+# ── Hero Section ──────────────────────────────────────────
+
 st.markdown("""
-<style>
-    .main-header {
-        text-align: center;
-        padding: 1rem 0;
-    }
-    .subtitle {
-        text-align: center;
-        color: #888;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-    }
-    .source-tag {
-        background-color: #1e3a5f;
-        color: #7eb8f7;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-family: monospace;
-    }
-    .stChatMessage { border-radius: 10px; }
-</style>
+<div class="hero">
+
+<h1>🏭 DocuMind AI</h1>
+
+<h3>RAG-Powered Document Intelligence</h3>
+
+<p>
+Search • Safety Manuals • SOPs • Operational Procedures
+</p>
+
+</div>
 """, unsafe_allow_html=True)
 
-# ── Header ────────────────────────────────────────────────
-st.markdown('<div class="main-header">', unsafe_allow_html=True)
-st.title("🏭 DocuMind AI")
-st.markdown('<p class="subtitle">SAIL Bokaro Steel Plant &nbsp;|&nbsp; RAG-Powered Document Intelligence</p>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
 st.divider()
 
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ Settings")
-    use_fallback = st.toggle("Use Gemini (fallback LLM)", value=False)
-    st.markdown("---")
-    st.markdown("**📚 Indexed Documents**")
-    st.markdown("- Blast Furnace Shutdown SOP")
-    st.markdown("- Gas Leak Emergency Response")
-    st.markdown("- Coke Oven PPE Requirements")
-    st.markdown("---")
-    st.markdown("**💡 Example Queries**")
-    st.markdown("- What is the shutdown protocol for Blast Furnace?")
-    st.markdown("- What PPE is required in the coke oven area?")
-    st.markdown("- How to handle a gas leak emergency?")
-    st.markdown("- What is the CO evacuation threshold?")
-    st.markdown("- What are the post-shutdown checks for Blast Furnace?")
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat"):
+
+    st.markdown("## 📚 Knowledge Base")
+
+    st.markdown("""
+📄 **Blast Furnace Shutdown SOP**
+
+📄 **Gas Leak Emergency Response**
+
+📄 **Coke Oven PPE Requirements**
+""")
+
+    st.divider()
+
+    st.markdown("## ⚙ AI Settings")
+
+    use_fallback = st.toggle(
+        "Use Gemini as fallback",
+        value=False,
+        help="Automatically switches to Gemini if the primary model is unavailable."
+    )
+
+    st.divider()
+
+    st.markdown("## 💡 Try Asking")
+
+    st.markdown("""
+- Shutdown procedure for Blast Furnace
+
+- PPE requirements in Coke Oven
+
+- Gas leak emergency protocol
+
+- CO evacuation threshold
+""")
+
+    st.divider()
+
+    if st.button("🗑 Clear Conversation", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -75,19 +89,19 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg.get("sources"):
-            with st.expander("📄 Sources"):
+            with st.expander("📄 Source Documents ",expanded=False):
                 for src in msg["sources"]:
                     st.markdown(f'<span class="source-tag">📎 {src}</span>', unsafe_allow_html=True)
 
 # ── Chat Input ────────────────────────────────────────────
-if question := st.chat_input("Ask about SOPs, safety guidelines, or procedures..."):
+if question := st.chat_input("How can I help you today ?"):
 
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching documents..."):
+        with st.spinner("🔍 Searching knowledge base...."):
             try:
                 result = get_answer(question, use_fallback=use_fallback)
                 answer = result["answer"]
@@ -96,7 +110,7 @@ if question := st.chat_input("Ask about SOPs, safety guidelines, or procedures..
                 st.markdown(answer)
 
                 if sources:
-                    with st.expander("📄 Sources"):
+                    with st.expander("📄 Source Documents",expanded=False):
                         for src in sources:
                             st.markdown(f'<span class="source-tag">📎 {src}</span>', unsafe_allow_html=True)
 
