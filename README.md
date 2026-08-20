@@ -91,5 +91,3 @@ Do not share this file. It is already listed in `.gitignore`.
     └── README.md
 
 ---
-
-*Built during internship at SAIL Bokaro Steel Plant, June 2025*
