@@ -11,14 +11,19 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from rag.embeddings import get_embedding_model
 
-FAISS_PATH = "vectorstore/faiss_index"
+# Anchor to the project root (parent of this file's rag/ folder) so the
+# vectorstore is found regardless of the working directory the app is
+# launched from (e.g. `streamlit run app/main.py` from a different cwd,
+# or when deployed on Streamlit Cloud).
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+FAISS_PATH = os.path.join(_PROJECT_ROOT, "vectorstore", "faiss_index")
 
 
 def build_vectorstore(chunks: List[Document]) -> FAISS:
     print(f"\n── Building Vector Store ───────────────")
     embeddings = get_embedding_model()
     vectorstore = FAISS.from_documents(chunks, embeddings)
-    os.makedirs("vectorstore", exist_ok=True)
+    os.makedirs(os.path.dirname(FAISS_PATH), exist_ok=True)
     vectorstore.save_local(FAISS_PATH)
     print(f"✓ Vector store saved ({len(chunks)} chunks indexed)")
     return vectorstore
