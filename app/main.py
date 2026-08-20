@@ -4,6 +4,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import streamlit as st
 from chat import get_answer
+from config.settings import DATA_DIR
+from rag.ingestion import ingest_uploaded_file
+from rag.vectorstore import add_documents_to_store
 
 st.set_page_config(
     page_title="DocuMind AI",
@@ -35,18 +38,53 @@ Search • Safety Manuals • SOPs • Operational Procedures
 
 st.divider()
 
+
+def get_indexed_pdf_names():
+    """List PDFs currently in data/raw/, so the sidebar reflects reality
+    instead of a hardcoded list."""
+    if not os.path.isdir(DATA_DIR):
+        return []
+    return sorted(f for f in os.listdir(DATA_DIR) if f.lower().endswith(".pdf"))
+
+
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
 
     st.markdown("## 📚 Knowledge Base")
 
-    st.markdown("""
-📄 **Blast Furnace Shutdown SOP**
+    indexed_pdfs = get_indexed_pdf_names()
+    if indexed_pdfs:
+        for name in indexed_pdfs:
+            st.markdown(f"📄 **{name}**")
+    else:
+        st.caption("No documents indexed yet.")
 
-📄 **Gas Leak Emergency Response**
+    st.divider()
 
-📄 **Coke Oven PPE Requirements**
-""")
+    st.markdown("## 📤 Upload a PDF")
+    uploaded_file = st.file_uploader(
+        "Add a new document to the knowledge base",
+        type=["pdf"],
+        label_visibility="collapsed",
+    )
+
+    if uploaded_file is not None:
+        if st.button("➕ Add to Knowledge Base", use_container_width=True):
+            with st.spinner(f"Processing {uploaded_file.name}..."):
+                os.makedirs(DATA_DIR, exist_ok=True)
+                save_path = os.path.join(DATA_DIR, uploaded_file.name)
+
+                with open(save_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                try:
+                    chunks = ingest_uploaded_file(save_path, uploaded_file.name)
+                    add_documents_to_store(chunks)
+                    st.cache_resource.clear()
+                    st.success(f"✓ {uploaded_file.name} added to the knowledge base!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not process this PDF: {e}")
 
     st.divider()
 

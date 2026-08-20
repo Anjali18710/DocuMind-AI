@@ -55,3 +55,20 @@ def ingest_documents(data_dir: str = DATA_DIR) -> List[Document]:
     docs = load_pdfs(data_dir)
     chunks = split_documents(docs)
     return chunks
+
+
+def ingest_uploaded_file(file_path: str, original_filename: str) -> List[Document]:
+    """
+    Load and split a single PDF that was uploaded by a user at runtime
+    (as opposed to the bulk data/raw/ folder used at initial setup).
+    """
+    print(f"  Loading uploaded file: {original_filename}")
+    loader = PyPDFLoader(file_path)
+    pages = loader.load()
+
+    for page in pages:
+        page.metadata["source"] = original_filename
+
+    chunks = split_documents(pages)
+    print(f"✓ Uploaded file split into {len(chunks)} chunks")
+    return chunks

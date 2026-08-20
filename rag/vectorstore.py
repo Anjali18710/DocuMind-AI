@@ -42,3 +42,20 @@ def load_vectorstore() -> FAISS:
 
 def vectorstore_exists() -> bool:
     return os.path.exists(FAISS_PATH)
+
+
+def add_documents_to_store(chunks: List[Document]) -> FAISS:
+    """
+    Add new chunks to the vector store. If a store already exists on disk,
+    the chunks are merged into it. If not, a new store is created from
+    these chunks. Either way, the result is persisted to disk so it
+    survives an app restart.
+    """
+    if vectorstore_exists():
+        vectorstore = load_vectorstore()
+        vectorstore.add_documents(chunks)
+        vectorstore.save_local(FAISS_PATH)
+        print(f"✓ Added {len(chunks)} chunks to existing vector store")
+    else:
+        vectorstore = build_vectorstore(chunks)
+    return vectorstore
