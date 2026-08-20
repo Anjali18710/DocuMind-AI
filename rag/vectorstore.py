@@ -6,15 +6,12 @@ persisting it to disk, and loading it back for querying.
 """
 
 import os
+import shutil
 from typing import List
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from rag.embeddings import get_embedding_model
 
-# Anchor to the project root (parent of this file's rag/ folder) so the
-# vectorstore is found regardless of the working directory the app is
-# launched from (e.g. `streamlit run app/main.py` from a different cwd,
-# or when deployed on Streamlit Cloud).
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FAISS_PATH = os.path.join(_PROJECT_ROOT, "vectorstore", "faiss_index")
 
@@ -45,12 +42,6 @@ def vectorstore_exists() -> bool:
 
 
 def add_documents_to_store(chunks: List[Document]) -> FAISS:
-    """
-    Add new chunks to the vector store. If a store already exists on disk,
-    the chunks are merged into it. If not, a new store is created from
-    these chunks. Either way, the result is persisted to disk so it
-    survives an app restart.
-    """
     if vectorstore_exists():
         vectorstore = load_vectorstore()
         vectorstore.add_documents(chunks)
@@ -59,3 +50,19 @@ def add_documents_to_store(chunks: List[Document]) -> FAISS:
     else:
         vectorstore = build_vectorstore(chunks)
     return vectorstore
+
+
+def rebuild_vectorstore_from_data_dir():
+    from rag.ingestion import ingest_documents
+    from config.settings import DATA_DIR
+
+    if os.path.exists(FAISS_PATH):
+        shutil.rmtree(FAISS_PATH)
+
+    try:
+        chunks = ingest_documents(DATA_DIR)
+    except FileNotFoundError:
+        print("No PDFs remain in data directory; vector store cleared.")
+        return None
+
+    return build_vectorstore(chunks)

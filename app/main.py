@@ -6,7 +6,7 @@ import streamlit as st
 from chat import get_answer
 from config.settings import DATA_DIR
 from rag.ingestion import ingest_uploaded_file
-from rag.vectorstore import add_documents_to_store
+from rag.vectorstore import add_documents_to_store, rebuild_vectorstore_from_data_dir
 
 st.set_page_config(
     page_title="DocuMind AI",
@@ -55,7 +55,21 @@ with st.sidebar:
     indexed_pdfs = get_indexed_pdf_names()
     if indexed_pdfs:
         for name in indexed_pdfs:
-            st.markdown(f"📄 **{name}**")
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"📄 **{name}**")
+            with col2:
+                delete_clicked = st.button("🗑", key=f"del_{name}", help=f"Remove {name}")
+
+            if delete_clicked:
+                with st.spinner(f"Removing {name}..."):
+                    file_path = os.path.join(DATA_DIR, name)
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    rebuild_vectorstore_from_data_dir()
+                    st.cache_resource.clear()
+                st.success(f"Removed {name}")
+                st.rerun()
     else:
         st.caption("No documents indexed yet.")
 
