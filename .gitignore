@@ -3,3 +3,12 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+.pytest_cache/
+
+# Local data written by the app (documents, logs, index cache)
+data/store/
+.cache/
+vectorstore/
+
+# Secrets
+.streamlit/secrets.toml

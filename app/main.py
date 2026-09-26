@@ -1,178 +1,74 @@
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
-from chat import get_answer
-from config.settings import DATA_DIR
-from rag.ingestion import ingest_uploaded_file
-from rag.vectorstore import add_documents_to_store, rebuild_vectorstore_from_data_dir
 
-st.set_page_config(
-    page_title="DocuMind AI",
-    page_icon="🏭",
-    layout="wide",
-)
+st.set_page_config(page_title="DocuMind AI", page_icon="🏭", layout="wide")
+
+from chat import admin_enabled, get_retriever, get_store, is_admin, logout, try_login
+from page_admin import render_admin
+from page_ask import render_ask
+from page_checklist import render_checklist
+from rag.metadata import format_revision
+from rag.pipeline import LANGUAGES
+from rag.storage import ACTIVE
 
 # ── Load CSS ──────────────────────────────────────────────
-css_path = os.path.join(os.path.dirname(__file__), "styles.css")
-
-with open(css_path) as f:
+with open(os.path.join(os.path.dirname(__file__), "styles.css"), encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# ── Hero Section ──────────────────────────────────────────
-
-st.markdown("""
-<div class="hero">
-
-<h1>🏭 DocuMind AI</h1>
-
-<h3>RAG-Powered Document Intelligence</h3>
-
-<p>
-Search • Safety Manuals • SOPs • Operational Procedures
-</p>
-
-</div>
-""", unsafe_allow_html=True)
-
-st.divider()
-
-
-def get_indexed_pdf_names():
-    """List PDFs currently in data/raw/, so the sidebar reflects reality
-    instead of a hardcoded list."""
-    if not os.path.isdir(DATA_DIR):
-        return []
-    return sorted(f for f in os.listdir(DATA_DIR) if f.lower().endswith(".pdf"))
-
+# ── Pages ─────────────────────────────────────────────────
+pages = [
+    st.Page(render_ask, title="Ask the SOPs", icon="💬", url_path="ask", default=True),
+    st.Page(render_checklist, title="Pre-job checklist", icon="✅", url_path="checklist"),
+]
+if is_admin():
+    pages.append(st.Page(render_admin, title="Admin", icon="🛠", url_path="admin"))
+page = st.navigation(pages)
 
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
+    try:
+        retriever = get_retriever()
+        departments = retriever.departments
+    except Exception as exc:
+        st.error(f"Knowledge base could not be loaded: {exc}")
+        departments = []
 
-    st.markdown("## 📚 Knowledge Base")
+    st.markdown("## 🔎 Search options")
+    dept = st.selectbox("Department", ["All departments"] + departments, key="dept_filter")
+    st.session_state.department = None if dept == "All departments" else dept
+    st.radio("Answer language", list(LANGUAGES), key="language_choice",
+             help="Auto answers in Hindi when the question is typed in Hindi.")
 
-    indexed_pdfs = get_indexed_pdf_names()
-    if indexed_pdfs:
-        for name in indexed_pdfs:
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                st.markdown(f"📄 **{name}**")
-            with col2:
-                delete_clicked = st.button("🗑", key=f"del_{name}", help=f"Remove {name}")
+    st.divider()
+    active_docs = sorted(get_store().list_documents(ACTIVE), key=lambda d: d.get("sop_no") or d["filename"])
+    with st.expander(f"📚 Knowledge base ({len(active_docs)} SOPs)"):
+        for d in active_docs:
+            st.markdown(
+                f"📄 **{d.get('sop_no') or d['filename']}** · {format_revision(d['revision'])}  \n"
+                f"<span class='muted'>{d['title']} — {d['department']}</span>",
+                unsafe_allow_html=True,
+            )
 
-            if delete_clicked:
-                with st.spinner(f"Removing {name}..."):
-                    file_path = os.path.join(DATA_DIR, name)
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    rebuild_vectorstore_from_data_dir()
-                    st.cache_resource.clear()
-                st.success(f"Removed {name}")
-                st.rerun()
+    st.divider()
+    if is_admin():
+        st.success("Signed in as admin")
+        if st.button("Sign out", use_container_width=True):
+            logout()
+            st.rerun()
+    elif admin_enabled():
+        with st.expander("🔐 Admin sign-in"):
+            with st.form("admin_login", border=False):
+                pw = st.text_input("Password", type="password")
+                if st.form_submit_button("Sign in", use_container_width=True):
+                    if try_login(pw):
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password")
     else:
-        st.caption("No documents indexed yet.")
+        st.caption("🔐 Admin tools are off. Set ADMIN_PASSWORD to enable document upload and the dashboard.")
 
-    st.divider()
-
-    st.markdown("## 📤 Upload a PDF")
-    uploaded_file = st.file_uploader(
-        "Add a new document to the knowledge base",
-        type=["pdf"],
-        label_visibility="collapsed",
-    )
-
-    if uploaded_file is not None:
-        if st.button("➕ Add to Knowledge Base", use_container_width=True):
-            with st.spinner(f"Processing {uploaded_file.name}..."):
-                os.makedirs(DATA_DIR, exist_ok=True)
-                save_path = os.path.join(DATA_DIR, uploaded_file.name)
-
-                with open(save_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-
-                try:
-                    chunks = ingest_uploaded_file(save_path, uploaded_file.name)
-                    add_documents_to_store(chunks)
-                    st.cache_resource.clear()
-                    st.success(f"✓ {uploaded_file.name} added to the knowledge base!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not process this PDF: {e}")
-
-    st.divider()
-
-    st.markdown("## ⚙ AI Settings")
-
-    use_fallback = st.toggle(
-        "Use Gemini as fallback",
-        value=False,
-        help="Automatically switches to Gemini if the primary model is unavailable."
-    )
-
-    st.divider()
-
-    st.markdown("## 💡 Try Asking")
-
-    st.markdown("""
-- Shutdown procedure for Blast Furnace
-
-- PPE requirements in Coke Oven
-
-- Gas leak emergency protocol
-
-- CO evacuation threshold
-""")
-
-    st.divider()
-
-    if st.button("🗑 Clear Conversation", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-# ── Chat History ──────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if not st.session_state.messages:
-    st.info("👋 Ask me anything about SAIL SOPs, safety guidelines, or operational procedures.")
-
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-        if msg.get("sources"):
-            with st.expander("📄 Source Documents ",expanded=False):
-                for src in msg["sources"]:
-                    st.markdown(f'<span class="source-tag">📎 {src}</span>', unsafe_allow_html=True)
-
-# ── Chat Input ────────────────────────────────────────────
-if question := st.chat_input("How can I help you today ?"):
-
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.markdown(question)
-
-    with st.chat_message("assistant"):
-        with st.spinner("🔍 Searching knowledge base...."):
-            try:
-                result = get_answer(question, use_fallback=use_fallback)
-                answer = result["answer"]
-                sources = result["sources"]
-
-                st.markdown(answer)
-
-                if sources:
-                    with st.expander("📄 Source Documents",expanded=False):
-                        for src in sources:
-                            st.markdown(f'<span class="source-tag">📎 {src}</span>', unsafe_allow_html=True)
-
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "sources": sources,
-                })
-
-            except RuntimeError as e:
-                st.error(str(e))
-            except Exception as e:
-                st.error(f"Something went wrong: {e}")
+page.run()
